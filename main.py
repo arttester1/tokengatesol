@@ -64,7 +64,8 @@ from verification import (
 # Import blockchain functions from blockchain_integrations module
 from blockchain_integrations import (
     verify_user_balance, check_token_transfer_moralis, get_token_decimals,
-    is_valid_ethereum_address, CHAIN_MAP, PUBLIC_RPC_ENDPOINTS
+    is_valid_ethereum_address, CHAIN_MAP, PUBLIC_RPC_ENDPOINTS,
+    get_token_balance_moralis, get_token_balance_etherscan
 )
 
 
