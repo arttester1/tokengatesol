@@ -1,0 +1,14 @@
+{
+  "-1001906288752": {
+    "chain_id": "eth",
+    "token": "0xe15ed6cad89cb6d71b1f18eff938c65fbc59b371",
+    "min_balance": 1000000.0,
+    "verifier": "0x00000000b8f2fa0bcfb6d540669ba4fb6cf76611"
+  },
+  "-1003031471705": {
+    "chain_id": "eth",
+    "token": "0x95ae252633e9ea03bdfe67874b349b41163464ce",
+    "min_balance": 10.0,
+    "verifier": "0x00000000b8f2fa0bcfb6d540669ba4fb6cf76611"
+  }
+}

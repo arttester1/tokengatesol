@@ -1,0 +1,18 @@
+{
+  "-1001906288752": {
+    "7585807164": {
+      "address": "0x000000000Ab8Af2f9fFFD660214F27C6067Ed072",
+      "verified": true,
+      "last_verified": 1758471694,
+      "verification_tx": true
+    }
+  },
+  "-1003031471705": {
+    "1523774342": {
+      "address": "0x127B3BD44c452d00bdA424536E902EfF57453391",
+      "verified": false,
+      "last_verified": 1756315471,
+      "verification_tx": true
+    }
+  }
+}
