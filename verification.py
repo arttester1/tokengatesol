@@ -1,4 +1,3 @@
-```python
 #!/usr/bin/env python3
 """
 Verification Module - Extracted functions for both main bot and cron job
@@ -199,4 +198,3 @@ def remove_pending_whitelist(group_id):
         del pending[group_id]
         return save_json_file(PENDING_WHITELIST_PATH, pending)
     return True
-```
