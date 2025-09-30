@@ -193,88 +193,62 @@ def get_group_from_token(token):
 # ---------------------------------------------
 # Setup Flow Functions
 # ---------------------------------------------
-async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start the setup flow (admins/owner only, groups only)."""
-    if update.message.chat.type not in ["group", "supergroup"]:
-        # Hard block for DMs
-        await update.message.reply_text("/setup must be run from inside a group.")
-        return
-
-    group_id = str(update.message.chat_id)
+async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle responses during setup flow (Solana version)."""
     user_id = update.message.from_user.id
-    group_name = update.message.chat.title or f"Group {group_id}"
+    message_text = update.message.text.strip()  # keep original case for addresses
 
-    # ✅ Step 0: Check if group is blocked (3-strike policy)
-    if is_group_blocked(group_id):
-        # Ignore all input from blocked groups - don't respond
-        return
+    # Check if this is a group and if group is blocked (3-strike policy)
+    if update.message.chat.type in ["group", "supergroup"]:
+        group_id = str(update.message.chat_id)
+        if is_group_blocked(group_id):
+            return  # ignore blocked groups
 
-    # ✅ Step 1: Check admin/owner FIRST - block normal members immediately
-    try:
-        member = await context.bot.get_chat_member(chat_id=group_id, user_id=user_id)
-        if not is_admin(member) and not is_owner(user_id):
-            await update.message.reply_text("❌ Only group admins can run /setup.")
+    if user_id not in setup_sessions:
+        return  # Not in setup flow
+    
+    session = setup_sessions[user_id]
+    step = session["step"]
+    group_id = session["group_id"]
+    
+    if step == "confirm_overwrite":
+        if message_text.lower() in ["yes", "y"]:
+            # skip chain selection, hardcode Solana
+            session["data"]["chain_id"] = "solana"
+            session["step"] = "token_address"
+            await update.message.reply_text("Enter the token mint address:")
+        else:
+            await update.message.reply_text("❌ Setup cancelled.")
+            del setup_sessions[user_id]
+    
+    elif step == "token_address":
+        if not is_valid_ethereum_address(message_text):  # still using the validator
+            await update.message.reply_text("Invalid Solana address format. Please enter a valid mint address:")
             return
-    except Exception as e:
-        logger.error(f"Error checking admin status: {e}")
-        await update.message.reply_text("Error verifying admin status.")
-        return
-
-    # ✅ Step 2: Whitelist check (only for admins/owner that passed above)
-    if not is_owner(user_id) and not is_group_whitelisted(group_id):
-        admin_name = update.message.from_user.full_name or f"User {user_id}"
-        add_pending_whitelist(group_id, group_name, user_id, admin_name)
-
+        
+        session["data"]["token"] = message_text
+        session["step"] = "min_balance"
+        await update.message.reply_text("Enter the minimum required token balance (e.g., 1.5):")
+    
+    elif step == "min_balance":
+        if not is_valid_float(message_text) or float(message_text) <= 0:
+            await update.message.reply_text("Invalid amount. Please enter a positive number (e.g., 1.5):")
+            return
+        
+        session["data"]["min_balance"] = float(message_text)
+        session["step"] = "verifier_address"
         await update.message.reply_text(
-            "🔄 *Whitelist Request Sent* 🔄\n\n"
-            "Your group has been added to the whitelist queue.\n\n"
-            "Contact @rain5966 with your request and send 2 SOL to address pending.\n"
-            "You'll receive a notification when your group is approved.",
-            parse_mode="Markdown"
+            "Enter the verifier wallet address (where users will send 1 token to verify ownership):"
         )
+    
+    elif step == "verifier_address":
+        if not is_valid_ethereum_address(message_text):  # validator reused for Solana
+            await update.message.reply_text("Invalid Solana address format. Please enter a valid wallet address:")
+            return
+        
+        session["data"]["verifier"] = message_text
+        await complete_setup(update, user_id, group_id)
 
-        # Notify bot owner
-        if ADMIN_USER_ID:
-            try:
-                admin_keyboard = [
-                    [
-                        InlineKeyboardButton("✅ Approve", callback_data=f"approve_{group_id}"),
-                        InlineKeyboardButton("❌ Reject", callback_data=f"reject_{group_id}")
-                    ]
-                ]
-                admin_reply_markup = InlineKeyboardMarkup(admin_keyboard)
-
-                await context.bot.send_message(
-                    chat_id=ADMIN_USER_ID,
-                    text=f"📨 *New Whitelist Request* 📨\n\n"
-                         f"• Group: {group_name}\n"
-                         f"• Group ID: `{group_id}`\n"
-                         f"• Admin: {admin_name}\n"
-                         f"• Admin ID: `{user_id}`\n\n"
-                         f"Approve or reject this request:",
-                    reply_markup=admin_reply_markup,
-                    parse_mode="Markdown"
-                )
-            except Exception as e:
-                logger.error(f"Error notifying admin: {e}")
-        return
-
-    # ✅ Step 3: Continue with setup (or confirm overwrite)
-    config = load_json_file(CONFIG_PATH)
-    if group_id in config:
-        await update.message.reply_text(
-            "This group already has a configuration. Starting a new setup will overwrite it.\n"
-            "Do you want to continue? (yes/no)"
-        )
-        setup_sessions[user_id] = {
-            "group_id": group_id,
-            "step": "confirm_overwrite",
-            "data": {}
-        }
-        return
-
-    # Start new setup
-    await ask_token_address(update, user_id, group_id)
 
 async def ask_token_address(update: Update, user_id: int, group_id: int):
     """Ask user for token address (Solana hardcoded)."""
