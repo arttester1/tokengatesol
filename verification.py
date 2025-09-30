@@ -15,7 +15,7 @@ from typing import Dict, Any
 # Import blockchain functions from blockchain_integrations module
 from blockchain_integrations import (
     verify_user_balance, get_token_decimals,
-    get_token_balance_moralis,
+    get_token_balance_moralis, get_token_balance_etherscan,
     CHAIN_MAP
 )
 
@@ -35,6 +35,7 @@ WHITELIST_PATH = os.path.join(DATA_DIR, "whitelist.json")
 PENDING_WHITELIST_PATH = os.path.join(DATA_DIR, "pending_whitelist.json")
 REJECTED_GROUPS_PATH = os.path.join(DATA_DIR, "rejected_groups.json")
 
+
 # ---------------------------------------------
 # Token and Environment Setup
 # ---------------------------------------------
@@ -42,9 +43,10 @@ def get_token_from_env():
     """Fetch secrets from environment variables or fallback .env file."""
     telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
     moralis_key = os.getenv("MORALIS_API_KEY")
+    etherscan_key = os.getenv("ETHERSCAN_API_KEY")
 
     # Fallback to .env file if not set
-    if not (telegram_token and moralis_key):
+    if not (telegram_token and moralis_key and etherscan_key):
         try:
             with open(".env", "r") as f:
                 for line in f:
@@ -53,23 +55,27 @@ def get_token_from_env():
                         telegram_token = line.split("=", 1)[1].strip()
                     elif line.startswith("MORALIS_API_KEY=") and not moralis_key:
                         moralis_key = line.split("=", 1)[1].strip()
+                    elif line.startswith("ETHERSCAN_API_KEY=") and not etherscan_key:
+                        etherscan_key = line.split("=", 1)[1].strip()
         except FileNotFoundError:
             pass
 
-    return telegram_token, moralis_key, None
+    return telegram_token, moralis_key, etherscan_key
 
 # Get tokens
-TOKEN, MORALIS_API_KEY, _ = get_token_from_env()
+TOKEN, MORALIS_API_KEY, ETHERSCAN_API_KEY = get_token_from_env()
 
 # ---------------------------------------------
 # File Utilities
 # ---------------------------------------------
 def load_json_file(file_path):
     """Load JSON data from database or file (Railway-optimized)"""
+    # Check if we have database connection (Railway PostgreSQL)
     if os.getenv("DATABASE_URL"):
         from database_simple import load_json_file as db_load
         return db_load(file_path)
 
+    # Fallback to file system
     if os.path.exists(file_path):
         try:
             with open(file_path, "r") as f:
@@ -81,10 +87,12 @@ def load_json_file(file_path):
 
 def save_json_file(file_path, data):
     """Save JSON data to database or file (Railway-optimized)"""
+    # Check if we have database connection (Railway PostgreSQL)
     if os.getenv("DATABASE_URL"):
         from database_simple import save_json_file as db_save
         return db_save(file_path, data)
 
+    # Fallback to file system
     try:
         with open(file_path, "w") as f:
             json.dump(data, f, indent=2)
@@ -96,6 +104,10 @@ def save_json_file(file_path, data):
 def is_owner(user_id):
     """Check if user is the bot owner."""
     return str(user_id) == ADMIN_USER_ID
+
+# ---------------------------------------------
+# Web3 and Balance Verification Functions
+# ---------------------------------------------
 
 # ---------------------------------------------
 # 3-Strike Rejection Tracking System
@@ -116,9 +128,11 @@ def track_rejection(group_id, group_name=None, admin_id=None, admin_name=None):
             "blocked": False
         }
 
+    # Increment rejection count
     rejected_groups[group_id]["rejection_count"] += 1
     rejected_groups[group_id]["last_rejection"] = current_time
 
+    # Update admin info if provided
     if admin_id:
         rejected_groups[group_id]["last_admin_id"] = admin_id
     if admin_name:
@@ -126,6 +140,7 @@ def track_rejection(group_id, group_name=None, admin_id=None, admin_name=None):
     if group_name:
         rejected_groups[group_id]["group_name"] = group_name
 
+    # Check if should be blocked (3+ rejections)
     if rejected_groups[group_id]["rejection_count"] >= 3:
         rejected_groups[group_id]["blocked"] = True
 
