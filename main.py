@@ -295,63 +295,64 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
             return
     if user_id not in setup_sessions:
         return
-  
+
     session = setup_sessions[user_id]
-    step = session["step"]
-    group_id = session["group_id"]
-  
-    elif step == "token_address":
-        if not is_valid_ethereum_address(message_text):  # Uses original case for Solana address
-            keyboard = [
-                [
-                    InlineKeyboardButton("Retry", callback_data="retry_token_address"),
-                    InlineKeyboardButton("Cancel", callback_data="cancel_setup")
+    if session and "step" in session:  # Ensure session has a step before processing
+        step = session["step"]
+        group_id = session["group_id"]
+
+        if step == "token_address":
+            if not is_valid_ethereum_address(message_text):  # Uses original case for Solana address
+                keyboard = [
+                    [
+                        InlineKeyboardButton("Retry", callback_data="retry_token_address"),
+                        InlineKeyboardButton("Cancel", callback_data="cancel_setup")
+                    ]
                 ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
-                "Invalid Solana address format. Please try again or cancel setup.",
-                reply_markup=reply_markup
-            )
-            return
-        session["data"]["token"] = message_text  # Stores original case
-        session["step"] = "min_balance"
-        await update.message.reply_text("Enter the minimum required token balance (e.g., 1.5):")
-  
-    elif step == "min_balance":
-        if not is_valid_float(message_text) or float(message_text) <= 0:
-            keyboard = [
-                [
-                    InlineKeyboardButton("Retry", callback_data="retry_min_balance"),
-                    InlineKeyboardButton("Cancel", callback_data="cancel_setup")
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    "Invalid Solana address format. Please try again or cancel setup.",
+                    reply_markup=reply_markup
+                )
+                return
+            session["data"]["token"] = message_text  # Stores original case
+            session["step"] = "min_balance"
+            await update.message.reply_text("Enter the minimum required token balance (e.g., 1.5):")
+
+        elif step == "min_balance":
+            if not is_valid_float(message_text) or float(message_text) <= 0:
+                keyboard = [
+                    [
+                        InlineKeyboardButton("Retry", callback_data="retry_min_balance"),
+                        InlineKeyboardButton("Cancel", callback_data="cancel_setup")
+                    ]
                 ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
-                "Invalid amount. Please enter a positive number (e.g., 1.5) or cancel setup.",
-                reply_markup=reply_markup
-            )
-            return
-        session["data"]["min_balance"] = float(message_text)
-        session["step"] = "verifier_address"
-        await update.message.reply_text("Enter the verifier wallet address (where users will send 1 token to verify ownership):")
-  
-    elif step == "verifier_address":
-        if not is_valid_ethereum_address(message_text):  # Uses original case for Solana address
-            keyboard = [
-                [
-                    InlineKeyboardButton("Retry", callback_data="retry_verifier_address"),
-                    InlineKeyboardButton("Cancel", callback_data="cancel_setup")
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    "Invalid amount. Please enter a positive number (e.g., 1.5) or cancel setup.",
+                    reply_markup=reply_markup
+                )
+                return
+            session["data"]["min_balance"] = float(message_text)
+            session["step"] = "verifier_address"
+            await update.message.reply_text("Enter the verifier wallet address (where users will send 1 token to verify ownership):")
+
+        elif step == "verifier_address":
+            if not is_valid_ethereum_address(message_text):  # Uses original case for Solana address
+                keyboard = [
+                    [
+                        InlineKeyboardButton("Retry", callback_data="retry_verifier_address"),
+                        InlineKeyboardButton("Cancel", callback_data="cancel_setup")
+                    ]
                 ]
-            ]
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            await update.message.reply_text(
-                "Invalid Solana address format. Please try again or cancel setup.",
-                reply_markup=reply_markup
-            )
-            return
-        session["data"]["verifier"] = message_text  # Stores original case
-        await complete_setup(update, user_id, group_id)
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await update.message.reply_text(
+                    "Invalid Solana address format. Please try again or cancel setup.",
+                    reply_markup=reply_markup
+                )
+                return
+            session["data"]["verifier"] = message_text  # Stores original case
+            await complete_setup(update, user_id, group_id)
 
 async def handle_setup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle setup flow button clicks."""
