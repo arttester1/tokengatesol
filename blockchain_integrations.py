@@ -38,16 +38,15 @@ async def get_token_balance_moralis(wallet_address: str, token_mint: str) -> flo
         response = await asyncio.to_thread(requests.get, url, headers)
         response.raise_for_status()
 
-        tokens = response.json()
-        token = next((t for t in tokens if t.get("mint") == token_mint), None)
+        data = response.json()
+        # Moralis returns a list of token objects
+        token = next((t for t in data if t.get("mint") == token_mint), None)
         if token:
-            # Moralis returns string, already adjusted for decimals
             return float(token.get("amount", "0"))
         return 0.0
     except Exception as e:
         logger.error(f"Moralis Error: {e}")
         return 0.0
-
 
 async def get_token_balance_rpc(wallet_address: str, token_mint: str) -> float:
     """Get SPL token balance using Solana RPC"""
@@ -75,7 +74,6 @@ async def get_token_balance_rpc(wallet_address: str, token_mint: str) -> float:
     except Exception as e:
         logger.error(f"RPC Error: {e}")
         return 0.0
-
 
 # ---------------------------------------------
 # Main Verification Function
