@@ -300,8 +300,6 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
     step = session["step"]
     group_id = session["group_id"]
   
-    # Removed confirm_overwrite logic (handled by buttons in start_setup_flow)
-  
     elif step == "token_address":
         if not is_valid_ethereum_address(message_text):  # Uses original case for Solana address
             keyboard = [
