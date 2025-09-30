@@ -64,7 +64,7 @@ from verification import (
 # Import blockchain functions from blockchain_integrations module
 from blockchain_integrations import (
     verify_user_balance, check_token_transfer_moralis, get_token_decimals,
-    is_valid_solana_address, get_token_balance_moralis,
+    is_valid_solana_address, get_token_balance_moralis, get_token_balance_rpc,
 )
 
 
