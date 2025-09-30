@@ -1591,7 +1591,6 @@ BALANCE_APIS = [
     #    "enabled": lambda: ALCHEMY_API_KEY,
     #    "args": lambda wallet, token, chain: (wallet, token, chain),
     # }
-]
 
 # ---------------------------------------------
 # test get balance
