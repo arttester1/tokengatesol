@@ -1,8 +1,3 @@
-#!/usr/bin/env python3
-"""
-Biggie Telegram Bot - Railway Optimized Version
-"""
-
 print("🔄 Starting imports...")
 try:
     import logging
@@ -15,7 +10,7 @@ try:
     import time
     print("✅ Basic imports successful")
 
-    from moralis import evm_api
+    from moralis import sol_api
     import aiohttp
     print("✅ API imports successful")
 
@@ -49,7 +44,6 @@ except Exception as e:
 
 print("✅ All imports completed successfully")
 
-
 # Import verification functions from verification module
 from verification import (
     load_json_file, save_json_file, is_owner, get_token_from_env,
@@ -65,12 +59,11 @@ from verification import (
 from blockchain_integrations import (
     verify_user_balance, check_token_transfer_moralis, get_token_decimals,
     is_valid_ethereum_address, CHAIN_MAP, PUBLIC_RPC_ENDPOINTS,
-    get_token_balance_moralis, get_token_balance_etherscan
+    get_token_balance_moralis
 )
 
-
 # Get tokens and admin user ID
-TOKEN, MORALIS_API_KEY, ETHERSCAN_API_KEY = get_token_from_env()
+TOKEN, MORALIS_API_KEY, _ = get_token_from_env()
 ADMIN_USER_ID = os.getenv("ADMIN_USER_ID", "1825755152")
 
 # Support Railway persistent volume via DATA_DIR (from verification module)
@@ -79,19 +72,16 @@ from verification import DATA_DIR
 print("🔍 Token check results:")
 print(f"- TELEGRAM_BOT_TOKEN: {'✅ Found' if TOKEN else '❌ Missing'}")
 print(f"- MORALIS_API_KEY: {'✅ Found' if MORALIS_API_KEY else '❌ Missing'}")
-print(f"- ETHERSCAN_API_KEY: {'✅ Found' if ETHERSCAN_API_KEY else '❌ Missing'}")
 
 if not TOKEN:
     print("ERROR: TELEGRAM_BOT_TOKEN is required but missing!")
     print("Available env vars with 'TOKEN' or 'API':", [k for k in os.environ.keys() if 'TOKEN' in k or 'API' in k])
     print("All env vars:", list(os.environ.keys())[:10], "..." if len(os.environ) > 10 else "")
     print("Continuing with limited functionality...")
-    # Don't exit - let's see what else breaks
 
 print("✅ Environment check passed:")
 print(f"- TELEGRAM_BOT_TOKEN: {'✅ Set' if TOKEN else '❌ Missing'}")
 print(f"- MORALIS_API_KEY: {'✅ Set' if MORALIS_API_KEY else '❌ Missing'}")
-print(f"- ETHERSCAN_API_KEY: {'✅ Set' if ETHERSCAN_API_KEY else '❌ Missing'}")
 print(f"- DATA_DIR: {DATA_DIR}")
 print(f"- ADMIN_USER_ID: {ADMIN_USER_ID}")
 
@@ -206,7 +196,6 @@ def get_group_from_token(token):
 async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the setup flow (admins/owner only, groups only)."""
     if update.message.chat.type not in ["group", "supergroup"]:
-        # Hard block for DMs
         await update.message.reply_text("/setup must be run from inside a group.")
         return
 
@@ -214,12 +203,9 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     group_name = update.message.chat.title or f"Group {group_id}"
 
-    # ✅ Step 0: Check if group is blocked (3-strike policy)
     if is_group_blocked(group_id):
-        # Ignore all input from blocked groups - don't respond
         return
 
-    # ✅ Step 1: Check admin/owner FIRST - block normal members immediately
     try:
         member = await context.bot.get_chat_member(chat_id=group_id, user_id=user_id)
         if not is_admin(member) and not is_owner(user_id):
@@ -230,7 +216,6 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Error verifying admin status.")
         return
 
-    # ✅ Step 2: Whitelist check (only for admins/owner that passed above)
     if not is_owner(user_id) and not is_group_whitelisted(group_id):
         admin_name = update.message.from_user.full_name or f"User {user_id}"
         add_pending_whitelist(group_id, group_name, user_id, admin_name)
@@ -238,12 +223,11 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "🔄 *Whitelist Request Sent* 🔄\n\n"
             "Your group has been added to the whitelist queue.\n\n"
-            "Contact @rain5966 with your request and send 0.1 ETH to 0x00000000B8f2Fa0BCfB6d540669BA4FB6CF76611.\n"
+            "Contact @rain5966 with your request and send 0.1 SOL to <Solana_owner_address>.\n"
             "You'll receive a notification when your group is approved.",
             parse_mode="Markdown"
         )
 
-        # Notify bot owner
         if ADMIN_USER_ID:
             try:
                 admin_keyboard = [
@@ -269,7 +253,6 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Error notifying admin: {e}")
         return
 
-    # ✅ Step 3: Continue with setup (or confirm overwrite)
     config = load_json_file(CONFIG_PATH)
     if group_id in config:
         await update.message.reply_text(
@@ -283,32 +266,29 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         return
 
-    # Start new setup
-    await ask_chain(update, user_id, group_id)
+    await ask_token_address(update, user_id, group_id)
 
-async def ask_chain(update: Update, user_id: int, group_id: int):
-    """Ask user to select chain."""
+async def ask_token_address(update: Update, user_id: int, group_id: int):
+    """Ask user for token address (Solana hardcoded)."""
     setup_sessions[user_id] = {
         "group_id": group_id,
-        "step": "chain",
-        "data": {}
+        "step": "token_address",
+        "data": {"chain_id": "solana"}
     }
-    await update.message.reply_text("Which chain? (currently only ETH is supported)")
+    await update.message.reply_text("Enter the token mint address:")
 
 async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle responses during setup flow."""
     user_id = update.message.from_user.id
     message_text = update.message.text.strip().lower()
 
-    # Check if this is a group and if group is blocked (3-strike policy)
     if update.message.chat.type in ["group", "supergroup"]:
         group_id = str(update.message.chat_id)
         if is_group_blocked(group_id):
-            # Ignore all input from blocked groups - don't respond
             return
 
     if user_id not in setup_sessions:
-        return  # Not in setup flow
+        return
     
     session = setup_sessions[user_id]
     step = session["step"]
@@ -316,23 +296,14 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
     
     if step == "confirm_overwrite":
         if message_text in ["yes", "y"]:
-            await ask_chain(update, user_id, group_id)
+            await ask_token_address(update, user_id, group_id)
         else:
             await update.message.reply_text("Setup cancelled.")
             del setup_sessions[user_id]
     
-    elif step == "chain":
-        if message_text != "eth":
-            await update.message.reply_text("Only ETH is currently supported. Please enter 'ETH'.")
-            return
-        
-        session["data"]["chain_id"] = "eth"
-        session["step"] = "token_address"
-        await update.message.reply_text("Enter the token contract address:")
-    
     elif step == "token_address":
         if not is_valid_ethereum_address(message_text):
-            await update.message.reply_text("Invalid Ethereum address format. Please enter a valid contract address:")
+            await update.message.reply_text("Invalid Solana address format. Please enter a valid token mint address:")
             return
         
         session["data"]["token"] = message_text
@@ -350,7 +321,7 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
     
     elif step == "verifier_address":
         if not is_valid_ethereum_address(message_text):
-            await update.message.reply_text("Invalid Ethereum address format. Please enter a valid wallet address:")
+            await update.message.reply_text("Invalid Solana address format. Please enter a valid wallet address:")
             return
         
         session["data"]["verifier"] = message_text
@@ -361,17 +332,15 @@ async def complete_setup(update: Update, user_id: int, group_id: int):
     session = setup_sessions[user_id]
     config_data = session["data"]
     
-    # Save configuration
     config = load_json_file(CONFIG_PATH)
     config[group_id] = config_data
     
     if save_json_file(CONFIG_PATH, config):
-        # Generate verification link
         verification_link = generate_verification_link(group_id)
         
         await update.message.reply_text(
             "✅ Setup completed!\n\n"
-            f"• Chain: {config_data['chain_id']}\n"
+            f"• Chain: Solana\n"
             f"• Token: {config_data['token']}\n"
             f"• Min Balance: {config_data['min_balance']}\n"
             f"• Verifier: {config_data['verifier']}\n\n"
@@ -1573,48 +1542,25 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 BALANCE_APIS = [
     {
         "name": "Moralis",
-        "func": get_token_balance_moralis,  # async
+        "func": get_token_balance_moralis,
         "enabled": lambda: MORALIS_API_KEY and len(MORALIS_API_KEY) > 50,
         "args": lambda wallet, token, chain: (wallet, token, chain),
     },
-    {
-        "name": "Etherscan",
-        "func": get_token_balance_etherscan,  # async
-        "enabled": lambda: ETHERSCAN_API_KEY,
-        "args": lambda wallet, token, chain: (wallet, token),
-        "raw": True,
-    },
-    # Add future balance API definitions here:
-    # {
-    #    "name": "Alchemy",
-    #    "func": get_token_balance_alchemy,
-    #    "enabled": lambda: ALCHEMY_API_KEY,
-    #    "args": lambda wallet, token, chain: (wallet, token, chain),
-    # }
 ]
-
-# ---------------------------------------------
-# test get balance
-# ---------------------------------------------
 
 async def test_balance_all(update, context):
     """
-    Telegram command: /testbalance <wallet_address> <token_address> [chain_id]
+    Telegram command: /testbalance <wallet_address> <token_address>
     Only available to owner and group admins.
-    Tests ALL available APIs with correct decimals.
+    Tests available APIs with correct decimals.
     """
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
 
-    # Check if this is a group and if group is blocked (3-strike policy)
     if update.effective_chat.type in ["group", "supergroup"]:
         group_id = str(chat_id)
         if is_group_blocked(group_id):
-            # Ignore all input from blocked groups - don't respond
             return
-
-    def is_owner(user_id):
-        return str(user_id) == str(ADMIN_USER_ID)
 
     async def is_group_admin(chat_id, user_id):
         try:
@@ -1623,7 +1569,6 @@ async def test_balance_all(update, context):
         except Exception:
             return False
 
-    # Only allow owner or group admin
     if not is_owner(user_id):
         if update.effective_chat.type in ["group", "supergroup"]:
             if not await is_group_admin(chat_id, user_id):
@@ -1635,19 +1580,18 @@ async def test_balance_all(update, context):
 
     args = context.args
     if len(args) < 2:
-        await update.message.reply_text("Usage: /testbalance <wallet_address> <token_address> [chain_id]")
+        await update.message.reply_text("Usage: /testbalance <wallet_address> <token_address>")
         return
 
     wallet_address = args[0]
     token_address = args[1]
-    chain_id = args[2] if len(args) > 2 else "eth"
+    chain_id = "solana"
 
     await update.message.reply_text(
-        f"Testing all available balance APIs for:\nWallet: `{wallet_address}`\nToken: `{token_address}`\nChain: `{chain_id}`...",
+        f"Testing balance for:\nWallet: `{wallet_address}`\nToken: `{token_address}`\nChain: Solana...",
         parse_mode="Markdown"
     )
 
-    # Fetch correct decimals first
     decimals = await get_token_decimals(token_address, chain_id)
     results = []
     for api in BALANCE_APIS:
@@ -1657,9 +1601,6 @@ async def test_balance_all(update, context):
         try:
             func_args = api["args"](wallet_address, token_address, chain_id)
             balance = await api["func"](*func_args)
-            # Normalize only Etherscan (raw)
-            if api.get("raw"):
-                balance = balance / (10 ** decimals)
             results.append(f"*{api['name']}*: `{balance}`")
         except Exception as e:
             results.append(f"*{api['name']}*: Error - `{str(e)}`")

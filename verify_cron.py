@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Railway Cron Job for Periodic User Verification
 This script runs as a separate Railway service with cron schedule: "0 */6 * * *"
