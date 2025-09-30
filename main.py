@@ -196,6 +196,7 @@ def get_group_from_token(token):
 async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the setup flow (admins/owner only, groups only)."""
     if update.message.chat.type not in ["group", "supergroup"]:
+        # Hard block for DMs
         await update.message.reply_text("/setup must be run from inside a group.")
         return
 
@@ -203,9 +204,12 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     group_name = update.message.chat.title or f"Group {group_id}"
 
+    # ✅ Step 0: Check if group is blocked (3-strike policy)
     if is_group_blocked(group_id):
+        # Ignore all input from blocked groups - don't respond
         return
 
+    # ✅ Step 1: Check admin/owner FIRST - block normal members immediately
     try:
         member = await context.bot.get_chat_member(chat_id=group_id, user_id=user_id)
         if not is_admin(member) and not is_owner(user_id):
@@ -216,6 +220,7 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Error verifying admin status.")
         return
 
+    # ✅ Step 2: Whitelist check (only for admins/owner that passed above)
     if not is_owner(user_id) and not is_group_whitelisted(group_id):
         admin_name = update.message.from_user.full_name or f"User {user_id}"
         add_pending_whitelist(group_id, group_name, user_id, admin_name)
@@ -223,11 +228,12 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "🔄 *Whitelist Request Sent* 🔄\n\n"
             "Your group has been added to the whitelist queue.\n\n"
-            "Contact @rain5966 with your request and send 2 SOL to <Solana_owner_address>.\n"
+            "Contact @rain5966 with your request and send 2 SOL to address pending.\n"
             "You'll receive a notification when your group is approved.",
             parse_mode="Markdown"
         )
 
+        # Notify bot owner
         if ADMIN_USER_ID:
             try:
                 admin_keyboard = [
@@ -253,19 +259,12 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Error notifying admin: {e}")
         return
 
+    # ✅ Step 3: Continue with setup (or confirm overwrite)
     config = load_json_file(CONFIG_PATH)
     if group_id in config:
-        keyboard = [
-            [
-                InlineKeyboardButton("Yes", callback_data="confirm_overwrite_yes"),
-                InlineKeyboardButton("No", callback_data="confirm_overwrite_no")
-            ]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             "This group already has a configuration. Starting a new setup will overwrite it.\n"
-            "Do you want to continue?",
-            reply_markup=reply_markup
+            "Do you want to continue? (yes/no)"
         )
         setup_sessions[user_id] = {
             "group_id": group_id,
@@ -274,6 +273,7 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         return
 
+    # Start new setup
     await ask_token_address(update, user_id, group_id)
 
 async def ask_token_address(update: Update, user_id: int, group_id: int):
