@@ -255,9 +255,17 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     config = load_json_file(CONFIG_PATH)
     if group_id in config:
+        keyboard = [
+            [
+                InlineKeyboardButton("Yes", callback_data="confirm_overwrite_yes"),
+                InlineKeyboardButton("No", callback_data="confirm_overwrite_no")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text(
             "This group already has a configuration. Starting a new setup will overwrite it.\n"
-            "Do you want to continue? (yes/no)"
+            "Do you want to continue?",
+            reply_markup=reply_markup
         )
         setup_sessions[user_id] = {
             "group_id": group_id,
@@ -292,12 +300,7 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
     step = session["step"]
     group_id = session["group_id"]
   
-    if step == "confirm_overwrite":
-        if message_text.lower() in ["yes", "y"]:  # Case-insensitive for "yes"/"y" replies
-            await ask_token_address(update, user_id, group_id)
-        else:
-            await update.message.reply_text("Setup cancelled.")
-            del setup_sessions[user_id]
+    # Removed confirm_overwrite logic (handled by buttons in start_setup_flow)
   
     elif step == "token_address":
         if not is_valid_ethereum_address(message_text):  # Uses original case for Solana address
