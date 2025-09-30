@@ -301,7 +301,7 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
         step = session["step"]
         group_id = session["group_id"]
 
-        elif step == "token_address":
+        if step == "token_address":
             if not is_valid_ethereum_address(message_text):  # Uses original case for Solana address
                 keyboard = [
                     [
@@ -836,7 +836,8 @@ async def handle_dm_start_command(update: Update, context: ContextTypes.DEFAULT_
         # Store verification session
         verification_sessions[(user_id, group_id)] = {
             "group_id": group_id,
-            "step": "awaiting_address"
+            "step": "awaiting_address",
+            "address": None
         }
         
         keyboard = [
@@ -934,7 +935,107 @@ async def handle_verification_button(update: Update, context: ContextTypes.DEFAU
 
     elif query.data == "cancel_verification":
         del verification_sessions[session_key]
-        await query.edit_message_text("Verification cancelled. You can start again anytime with a new verification link.")
+        await query.edit_message_text(
+            "Verification cancelled. You can start again anytime with a new verification link."
+        )
+
+    # ✅ NEW BRANCH: Done button
+    elif query.data == "done_transfer":
+        verifying_msg = await query.edit_message_text("🔍 Verifying your token transfer...")
+
+        now = int(time.time())
+        if "first_fail_time" not in user_session:
+            user_session["first_fail_time"] = now
+
+        # make sure state is correct
+        user_session["step"] = "awaiting_transfer"
+
+        if "address" not in user_session:
+            await verifying_msg.edit_text(
+                "⚠️ Missing wallet address in session. Please restart verification with a new link."
+            )
+            del verification_sessions[session_key]
+            return
+
+        config = load_json_file(CONFIG_PATH)
+        group_config = config.get(user_session["group_id"])
+
+        transfer_verified = await check_token_transfer_moralis(
+            group_config['verifier'],
+            user_session['address'],
+            group_config['token'],
+            group_config.get('chain_id', 'eth')
+        )
+
+        if transfer_verified:
+            # ✅ Success
+            user_data = load_json_file(USER_DATA_PATH)
+            if user_session["group_id"] not in user_data:
+                user_data[user_session["group_id"]] = {}
+
+            user_data[user_session["group_id"]][str(user_id)] = {
+                "address": user_session["address"],
+                "verified": True,
+                "last_verified": now,
+                "verification_tx": True
+            }
+            save_json_file(USER_DATA_PATH, user_data)
+
+            try:
+                chat = await context.bot.get_chat(user_session["group_id"])
+                invite_link = await chat.create_invite_link(
+                    name=f"Verified member {user_id}",
+                    member_limit=1,
+                    creates_join_request=False,
+                    expire_date=datetime.utcnow() + timedelta(minutes=10)
+                )
+
+                await verifying_msg.edit_text(
+                    "✅ *Verification Complete!* ✅\n\n"
+                    "You have successfully verified and proven wallet ownership! 🎉\n\n"
+                    f"Here's your invite link:\n[Join Here]({invite_link.invite_link})",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Error creating invite link: {e}")
+                await verifying_msg.edit_text(
+                    "✅ *Verification Complete!* ✅\n\n"
+                    "You're verified, but I couldn't generate the invite link. Ask the group admin.",
+                    parse_mode="Markdown"
+                )
+
+            del verification_sessions[session_key]
+
+        else:
+            timeout_seconds = 300
+            elapsed = now - user_session["first_fail_time"]
+            remaining = timeout_seconds - elapsed
+
+            if elapsed > timeout_seconds:
+                del verification_sessions[session_key]
+                await verifying_msg.edit_text(
+                    "❌ *Verification Timed Out* ❌\n\n"
+                    "No valid transfer detected within 5 minutes.\n"
+                    "Please restart verification using a new link from your group admin.",
+                    parse_mode="Markdown"
+                )
+                return
+
+            # ❌ Not verified yet → Retry/Cancel
+            keyboard = [
+                [InlineKeyboardButton("🔁 Retry Again", callback_data="retry_transfer_check")],
+                [InlineKeyboardButton("❌ Cancel", callback_data="cancel_verification")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await verifying_msg.edit_text(
+                f"❌ *Transfer Not Verified Yet* ❌\n\n"
+                f"It can take a few minutes for the blockchain to confirm your transfer.\n"
+                f"You still have {remaining} seconds before this session expires.\n\n"
+                "Wait at least a minute, then tap below to try again.",
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
 
     elif query.data == "retry_transfer_check":
         # Enforce cooldown between retries
@@ -950,12 +1051,11 @@ async def handle_verification_button(update: Update, context: ContextTypes.DEFAU
 
         user_session["last_retry"] = now
 
-        # Timeout tracking: respect first_fail_time if set
-        timeout_seconds = 300  # 5 minutes max
+        # Timeout tracking
+        timeout_seconds = 300
         elapsed = now - user_session["first_fail_time"]
 
         if elapsed > timeout_seconds:
-            # Session expired - hard fail
             del verification_sessions[session_key]
             await query.edit_message_text(
                 "❌ *Verification Timed Out* ❌\n\n"
@@ -979,7 +1079,7 @@ async def handle_verification_button(update: Update, context: ContextTypes.DEFAU
             )
 
             if transfer_verified:
-                # ✅ Success path
+                # ✅ Success
                 user_data = load_json_file(USER_DATA_PATH)
                 if user_session["group_id"] not in user_data:
                     user_data[user_session["group_id"]] = {}
@@ -1045,43 +1145,44 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle messages in DMs for verification."""
     if update.message.chat.type != "private":
         return
-   
+    
     user_id = update.message.from_user.id
     message_text = update.message.text.strip()
-   
+    
     # Check if user is the owner - bypass verification
     if is_owner(user_id):
         await update.message.reply_text("👑 Owner detected!")
         return
-   
+    
     # Find the user's session
     user_session = None
     session_key = None
     for key, session in verification_sessions.items():
-        if key[0] == user_id: # key[0] is user_id in the tuple (user_id, group_id)
+        if key[0] == user_id:  # key[0] is user_id in the tuple (user_id, group_id)
             user_session = session
             session_key = key
             break
-   
+    
     if not user_session:
         await update.message.reply_text(
             "Please use a verification link from your group admin to start the verification process."
         )
         return
-   
-    session = verification_sessions[(user_id, session["group_id"])]
-   
+    
+    # ✅ FIXED: use session_key instead of rebuilding tuple
+    session = verification_sessions[session_key]
+    
     if session["step"] == "awaiting_address":
-        if is_valid_ethereum_address(message_text):  # No .lower() here
-            session["address"] = message_text  # Store original case
+        if is_valid_ethereum_address(message_text):
+            session["address"] = message_text
             session["step"] = "checking_balance"
-           
+            
             # NEW: one-wallet-per-user per group (prevent reuse by someone else)
             user_data = load_json_file(USER_DATA_PATH)
             group_users = user_data.get(session["group_id"], {})
             for uid, rec in group_users.items():
                 if (
-                    rec.get("address", "") == message_text  # Removed .lower()
+                    rec.get("address", "").lower() == message_text.lower()
                     and uid != str(user_id)
                     and rec.get("verified", False) is True
                 ):
@@ -1089,36 +1190,44 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "❌ This wallet is already linked to another verified member of this group. "
                         "Use a different wallet or ask the admin to reset them."
                     )
-                    # End session safely without touching the database
-                    del verification_sessions[(user_id, session["group_id"])]
-                    return
-           
+                    # ✅ FIXED: use session_key
+                    del verification_sessions[session_key]
+                    return            
+            
             # Verify balance first
             verifying_msg = await update.message.reply_text("🔍 Checking your token balance...")
-           
+            
             config = load_json_file(CONFIG_PATH)
             group_config = config.get(session["group_id"])
-           
+            
             if not group_config:
                 await verifying_msg.edit_text("Group configuration not found. Please contact the group admin.")
-                del verification_sessions[(user_id, session["group_id"])]
+                # ✅ FIXED: use session_key
+                del verification_sessions[session_key]
                 return
-           
-            has_balance = await verify_user_balance(group_config, message_text)  # Uses original case
-           
+            
+            has_balance = await verify_user_balance(group_config, message_text)
+            
             if has_balance:
                 # Balance is sufficient, now ask for token transfer
                 session["step"] = "awaiting_transfer"
                 session["verified_balance"] = True
-               
+
+                # ✅ NEW: Add "Done" button
+                keyboard = [
+                    [InlineKeyboardButton("✅ Done", callback_data="done_transfer")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
                 await verifying_msg.edit_text(
                     f"✅ Balance verified! You hold sufficient tokens.\n\n"
                     f"To complete verification and prove wallet ownership:\n\n"
                     f"1. Send exactly **1 token** to this address:\n"
                     f"`{group_config['verifier']}`\n\n"
-                    f"2. After sending, type 'done' in this chat\n\n"
+                    f"2. After sending, tap the button below\n\n"
                     f"🔒 *This proves you own the wallet and completes verification.*",
-                    parse_mode="Markdown"
+                    parse_mode="Markdown",
+                    reply_markup=reply_markup
                 )
             else:
                 await verifying_msg.edit_text(
@@ -1127,46 +1236,50 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"Required: {group_config['min_balance']} tokens\n"
                     "Please try again with a different wallet or contact the group admin if you believe this is an error."
                 )
-                del verification_sessions[(user_id, session["group_id"])]
+                # ✅ FIXED: use session_key
+                del verification_sessions[session_key]
         else:
-            await update.message.reply_text("Please send a valid Solana wallet address (32-44 base58 characters):")
-   
+            await update.message.reply_text("Please send a valid Ethereum wallet address (starting with 0x followed by 40 characters):")
+    
     elif session["step"] == "awaiting_transfer" and message_text.lower() == "done":
         # User claims they sent the token, now verify the transaction
         verifying_msg = await update.message.reply_text("🔍 Verifying your token transfer...")
-       
+        
         # Start session timer immediately on "done"
         now = int(time.time())
         if "first_fail_time" not in session:
             session["first_fail_time"] = now
-       
+        
         config = load_json_file(CONFIG_PATH)
         group_config = config.get(session["group_id"])
+
         # Check if transfer occurred
         transfer_verified = False
         if MORALIS_API_KEY:
             transfer_verified = await check_token_transfer_moralis(
                 group_config['verifier'],
-                session['address'],  # Uses original case
+                session['address'],
                 group_config['token'],
-                group_config.get('chain_id', 'solana')
+                group_config.get('chain_id', 'eth')
             )
         else:
             transfer_verified = await check_token_transfer(
                 group_config['verifier'],
-                session['address'],  # Uses original case
+                session['address'],
                 group_config['token'],
-                group_config.get('chain_id', 'solana')
+                group_config.get('chain_id', 'eth')
             )
+
         if transfer_verified:
             # ✅ User verified successfully
             user_data = load_json_file(USER_DATA_PATH)
             if session["group_id"] not in user_data:
                 user_data[session["group_id"]] = {}
+
             # NEW: race-safe duplicate check just before write
             for uid, rec in user_data.get(session["group_id"], {}).items():
                 if (
-                    rec.get("address", "") == session["address"]  # Removed .lower()
+                    rec.get("address", "").lower() == session["address"].lower()
                     and uid != str(user_id)
                     and rec.get("verified", False) is True
                 ):
@@ -1174,15 +1287,18 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "❌ This wallet is already linked to another verified member of this group. "
                         "Use a different wallet or ask the admin to reset them."
                     )
-                    del verification_sessions[(user_id, session["group_id"])]
+                    # ✅ FIXED: use session_key
+                    del verification_sessions[session_key]
                     return
+
             user_data[session["group_id"]][str(user_id)] = {
-                "address": session["address"],  # Store original case
+                "address": session["address"],
                 "verified": True,
                 "last_verified": int(time.time()),
                 "verification_tx": True
             }
             save_json_file(USER_DATA_PATH, user_data)
+
             # Create invite link for the group
             try:
                 chat = await context.bot.get_chat(session["group_id"])
@@ -1194,6 +1310,7 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 keyboard = [[InlineKeyboardButton("✅ Join Group", url=invite_link.invite_link)]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
+
                 await verifying_msg.edit_text(
                     "✅ <b>Verification Complete!</b>\n\n"
                     "You have successfully verified your token holdings and proven wallet ownership! 🎉\n\n"
@@ -1209,18 +1326,22 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "Please contact the group admin for an invite link.",
                     parse_mode="Markdown"
                 )
+
             # ✅ Success: remove session completely
-            del verification_sessions[(user_id, session["group_id"])]
+            del verification_sessions[session_key]
+
         else:
             # ❌ Transfer not yet found – track first failure and give user time
             now = int(time.time())
             if "first_fail_time" not in session:
                 session["first_fail_time"] = now
-            timeout_seconds = 300 # 5 minutes total session time
+
+            timeout_seconds = 300  # 5 minutes total session time
             elapsed = now - session["first_fail_time"]
+
             if elapsed > timeout_seconds:
                 # Hard fail – end session
-                del verification_sessions[(user_id, session["group_id"])]
+                del verification_sessions[session_key]
                 await verifying_msg.edit_text(
                     "❌ *Verification Timed Out* ❌\n\n"
                     "No valid transfer detected within 5 minutes.\n"
@@ -1234,6 +1355,7 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     [InlineKeyboardButton("❌ Cancel", callback_data="cancel_verification")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
+
                 await verifying_msg.edit_text(
                     f"❌ *Transfer Not Verified Yet* ❌\n\n"
                     f"It can take a few minutes for the blockchain to confirm your transfer.\n"
@@ -1243,12 +1365,13 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     reply_markup=reply_markup
                 )
                 # 👀 IMPORTANT: session is NOT deleted here — user can retry
-   
+    
     elif session["step"] == "awaiting_transfer":
         await update.message.reply_text(
             "Please send exactly 1 token to the verifier address, then type 'done'.\n\n"
             "If you've changed your mind, type 'cancel' to stop the verification."
         )
+
 
 # ---------------------------------------------
 # Member Handling - REMOVED GRACE PERIOD
@@ -1586,7 +1709,7 @@ BALANCE_APIS = [
         "name": "Moralis",
         "func": get_token_balance_moralis,
         "enabled": lambda: MORALIS_API_KEY and len(MORALIS_API_KEY) > 50,
-        "args": lambda wallet, token, chain: (wallet, token, chain),
+        "args": lambda wallet, token, chain: (wallet, token, CHAIN_MAP.get(chain, chain)),
     },
 ]
 
