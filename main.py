@@ -64,8 +64,7 @@ from verification import (
 # Import blockchain functions from blockchain_integrations module
 from blockchain_integrations import (
     verify_user_balance, check_token_transfer_moralis, get_token_decimals,
-    is_valid_ethereum_address, CHAIN_MAP, PUBLIC_RPC_ENDPOINTS,
-    get_token_balance_moralis, get_token_balance_etherscan
+    is_valid_solana_address, get_token_balance_moralis,
 )
 
 
@@ -293,12 +292,13 @@ async def ask_chain(update: Update, user_id: int, group_id: int):
         "step": "chain",
         "data": {}
     }
-    await update.message.reply_text("Which chain? (currently only ETH is supported)")
+    await update.message.reply_text("Which chain? (currently only SOL is supported)")
 
 async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle responses during setup flow."""
     user_id = update.message.from_user.id
-    message_text = update.message.text.strip().lower()
+    raw_text = update.message.text.strip()
+    message_text = raw_text.lower()
 
     # Check if this is a group and if group is blocked (3-strike policy)
     if update.message.chat.type in ["group", "supergroup"]:
@@ -322,8 +322,8 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
             del setup_sessions[user_id]
     
     elif step == "chain":
-        if message_text != "eth":
-            await update.message.reply_text("Only ETH is currently supported. Please enter 'ETH'.")
+        if message_text != "sol":
+            await update.message.reply_text("Only SOL is currently supported. Please enter 'SOL'.")
             return
         
         session["data"]["chain_id"] = "eth"
@@ -331,8 +331,8 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Enter the token contract address:")
     
     elif step == "token_address":
-        if not is_valid_ethereum_address(message_text):
-            await update.message.reply_text("Invalid Ethereum address format. Please enter a valid contract address:")
+        if not is_valid_solana_address(message_text):
+            await update.message.reply_text("Invalid Solana address format. Please enter a valid token mint:")
             return
         
         session["data"]["token"] = message_text
@@ -349,8 +349,8 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Enter the verifier wallet address (where users will send 1 token to verify ownership):")
     
     elif step == "verifier_address":
-        if not is_valid_ethereum_address(message_text):
-            await update.message.reply_text("Invalid Ethereum address format. Please enter a valid wallet address:")
+        if not is_valid_solana_address(message_text):
+            await update.message.reply_text("Invalid Solana address format. Please enter a valid wallet address:")
             return
         
         session["data"]["verifier"] = message_text
@@ -1050,7 +1050,7 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = verification_sessions[(user_id, session["group_id"])]
     
     if session["step"] == "awaiting_address":
-        if is_valid_ethereum_address(message_text):
+        if is_valid_solana_address(message_text):
             session["address"] = message_text
             session["step"] = "checking_balance"
             
@@ -1381,7 +1381,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 /status - Check group settings
 /guide - Complete step-by-step guide
 /test_verify - Run verification immediately (testing)
-/testbalance <wallet_address> <token_address> [chain_id] - Test token balance across APIs
+/testbalance <wallet_address> <token_address>  - Test token balance across APIs
 /dump - dump the config/user data straight into your Telegram DM
 /admin blocked - List all blocked groups
 /admin rejections - Show all groups with rejections
@@ -1396,7 +1396,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 👨‍💼 *For Group Admins:*
 /setup - Setup your group with token rules
 /status - View current group settings & get verification link
-/testbalance <wallet_address> <token_address> [chain_id] - Test token balance across APIs
+/testbalance <wallet_address> <token_address> - Test token balance across APIs
 /guide - Complete step-by-step setup guide
 
 👤 *For Members:*
@@ -1574,16 +1574,16 @@ BALANCE_APIS = [
     {
         "name": "Moralis",
         "func": get_token_balance_moralis,  # async
-        "enabled": lambda: MORALIS_API_KEY and len(MORALIS_API_KEY) > 50,
-        "args": lambda wallet, token, chain: (wallet, token, chain),
+        "enabled": lambda: MORALIS_API_KEY and len(MORALIS_API_KEY) > 20,
+        "args": lambda wallet, token, chain: (wallet, token),
     },
     {
-        "name": "Etherscan",
-        "func": get_token_balance_etherscan,  # async
-        "enabled": lambda: ETHERSCAN_API_KEY,
+        "name": "Solana RPC",
+        "func": get_token_balance_rpc,  # async
+        "enabled": lambda: True,
         "args": lambda wallet, token, chain: (wallet, token),
-        "raw": True,
     },
+]
     # Add future balance API definitions here:
     # {
     #    "name": "Alchemy",
@@ -1599,9 +1599,9 @@ BALANCE_APIS = [
 
 async def test_balance_all(update, context):
     """
-    Telegram command: /testbalance <wallet_address> <token_address> [chain_id]
+    Telegram command: /testbalance <wallet_address> <token_mint>
     Only available to owner and group admins.
-    Tests ALL available APIs with correct decimals.
+    Tests Solana Moralis + RPC APIs.
     """
     user_id = update.effective_user.id
     chat_id = update.effective_chat.id
@@ -1610,8 +1610,7 @@ async def test_balance_all(update, context):
     if update.effective_chat.type in ["group", "supergroup"]:
         group_id = str(chat_id)
         if is_group_blocked(group_id):
-            # Ignore all input from blocked groups - don't respond
-            return
+            return  # ignore blocked groups
 
     def is_owner(user_id):
         return str(user_id) == str(ADMIN_USER_ID)
@@ -1623,7 +1622,7 @@ async def test_balance_all(update, context):
         except Exception:
             return False
 
-    # Only allow owner or group admin
+    # Owner or group admin only
     if not is_owner(user_id):
         if update.effective_chat.type in ["group", "supergroup"]:
             if not await is_group_admin(chat_id, user_id):
@@ -1635,31 +1634,25 @@ async def test_balance_all(update, context):
 
     args = context.args
     if len(args) < 2:
-        await update.message.reply_text("Usage: /testbalance <wallet_address> <token_address> [chain_id]")
+        await update.message.reply_text("Usage: /testbalance <wallet_address> <token_mint>")
         return
 
     wallet_address = args[0]
-    token_address = args[1]
-    chain_id = args[2] if len(args) > 2 else "eth"
+    token_mint = args[1]
 
     await update.message.reply_text(
-        f"Testing all available balance APIs for:\nWallet: `{wallet_address}`\nToken: `{token_address}`\nChain: `{chain_id}`...",
+        f"Testing Solana balance APIs for:\nWallet: `{wallet_address}`\nToken Mint: `{token_mint}`",
         parse_mode="Markdown"
     )
 
-    # Fetch correct decimals first
-    decimals = await get_token_decimals(token_address, chain_id)
     results = []
     for api in BALANCE_APIS:
         if not api["enabled"]():
             results.append(f"*{api['name']}*: _Not configured or unavailable_")
             continue
         try:
-            func_args = api["args"](wallet_address, token_address, chain_id)
+            func_args = api["args"](wallet_address, token_mint, "sol")
             balance = await api["func"](*func_args)
-            # Normalize only Etherscan (raw)
-            if api.get("raw"):
-                balance = balance / (10 ** decimals)
             results.append(f"*{api['name']}*: `{balance}`")
         except Exception as e:
             results.append(f"*{api['name']}*: Error - `{str(e)}`")

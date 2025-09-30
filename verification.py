@@ -15,8 +15,7 @@ from typing import Dict, Any
 # Import blockchain functions from blockchain_integrations module
 from blockchain_integrations import (
     verify_user_balance, get_token_decimals,
-    get_token_balance_moralis, get_token_balance_etherscan,
-    CHAIN_MAP
+    get_token_balance_moralis,
 )
 
 # Configure logging
