@@ -758,7 +758,7 @@ async def handle_dm_start_command(update: Update, context: ContextTypes.DEFAULT_
                     name=f"Owner access {user_id}",
                     member_limit=1,
                     creates_join_request=False,
-                    expire_date=datetime.utcnow() + timedelta(minutes=10)
+                    expire_date = datetime.now(timezone.utc) + timedelta(minutes=10)
                 )
                 await update.message.reply_text(
                     f"👑 Owner detected!\n\n"
@@ -799,7 +799,7 @@ async def handle_dm_start_command(update: Update, context: ContextTypes.DEFAULT_
                         name=f"Rejoin {user_id}",
                         member_limit=1,
                         creates_join_request=False,
-                        expire_date=datetime.utcnow() + timedelta(minutes=10)
+                        expire_date = datetime.now(timezone.utc) + timedelta(minutes=10)
                     )
                     await update.message.reply_text(
                         f"🔄 You were previously verified for *{chat.title}*, "
@@ -976,7 +976,7 @@ async def handle_verification_button(update: Update, context: ContextTypes.DEFAU
                         name=f"Verified member {user_id}",
                         member_limit=1,
                         creates_join_request=False,
-                        expire_date=datetime.utcnow() + timedelta(minutes=10)
+                        expire_date = datetime.now(timezone.utc) + timedelta(minutes=10)
                     )
 
                     await verifying_msg.edit_text(
@@ -1171,7 +1171,7 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     name=f"Verified member {user_id}",
                     member_limit=1,
                     creates_join_request=False,
-                    expire_date=datetime.utcnow() + timedelta(minutes=10)
+                    expire_date = datetime.now(timezone.utc) + timedelta(minutes=10)
                 )
                 keyboard = [[InlineKeyboardButton("✅ Join Group", url=invite_link.invite_link)]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
