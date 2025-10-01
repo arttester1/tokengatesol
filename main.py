@@ -1481,7 +1481,7 @@ Need help? Contact @rain5966
 
 *3. PROVIDE WALLET ADDRESS*
 • Send your Solana wallet address
-• Example: `8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5`
+• Example: 8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5
 • Bot will check your token balance
 
 *4. COMPLETE OWNERSHIP PROOF*
@@ -1507,7 +1507,7 @@ Need help? Contact your group admin.
 *SETUP YOUR GROUP*
 • Create a private group with no other members present
 • Go to user permissions in group settings and only leave Send Text and Media messages, disable the rest
-• Invite WenPadGateBot and set bot as admin with add and remove members permissions
+• Invite @WenPadGateBot and set bot as admin with add and remove members permissions
 • Use `/setup` in your group to get whitelisted
 • Use `/guide` in your group for more detailed admin guide
 
