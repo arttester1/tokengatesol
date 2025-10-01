@@ -5,3 +5,5 @@ moralis==0.1.43
 psycopg2-binary
 requests
 base58
+solana==0.30.2
+
