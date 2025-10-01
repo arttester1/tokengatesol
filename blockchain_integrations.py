@@ -127,22 +127,48 @@ async def get_token_decimals(token_address: str, chain_id: str = "sol") -> int:
 # ---------------------------------------------
 # Token Transfer Checking
 # ---------------------------------------------
-async def check_token_transfer_moralis(verifier_address: str, user_address: str, token_mint: str) -> bool:
+async def check_token_transfer_moralis(verifier_address: str, user_address: str, token_mint: str, limit: int = 20) -> bool:
     """
     Check if the user sent exactly 1 SPL token (token_mint) to verifier_address.
-    Uses Moralis Solana API to scan recent transfers.
+    Uses Helius parsed transaction API instead of raw RPC.
     """
     try:
-        url = f"https://solana-gateway.moralis.io/account/mainnet/{user_address}/transactions"
-        headers = {"accept": "application/json", "X-API-Key": MORALIS_API_KEY}
+        url = f"{RPC_ENDPOINT}"
+        headers = {"Content-Type": "application/json"}
 
-        # Fetch recent transactions
-        response = await asyncio.to_thread(requests.get, url, headers=headers)
-        response.raise_for_status()
-        txs = response.json()
+        # Step 1: Get recent transactions for the user
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getSignaturesForAddress",
+            "params": [
+                user_address,
+                {"limit": limit}
+            ],
+        }
+        resp = await asyncio.to_thread(requests.post, url, json=payload, headers=headers)
+        resp.raise_for_status()
+        signatures = [sig["signature"] for sig in resp.json().get("result", [])]
 
-        # Look through recent txs for SPL token transfers
-        for tx in txs.get("result", []):
+        if not signatures:
+            logger.info("No recent signatures found for user.")
+            return False
+
+        # Step 2: Ask Helius for parsed transactions (cleaner than raw RPC)
+        tx_payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTransactions",
+            "params": [signatures, {"encoding": "jsonParsed"}],
+        }
+        tx_resp = await asyncio.to_thread(requests.post, url, json=tx_payload, headers=headers)
+        tx_resp.raise_for_status()
+        txs = tx_resp.json().get("result", [])
+
+        # Step 3: Check each transaction for a matching transfer
+        for tx in txs:
+            if not tx:
+                continue
             instructions = tx.get("transaction", {}).get("message", {}).get("instructions", [])
             for ix in instructions:
                 parsed = ix.get("parsed", {})
@@ -154,12 +180,14 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
                         and info.get("mint") == token_mint
                     ):
                         amount = float(info.get("tokenAmount", {}).get("uiAmount", 0))
-                        if abs(amount - 1.0) < 1e-6:  # exactly 1 token
-                            logger.info("✅ Verified 1 token transfer from user to verifier")
+                        if abs(amount - 1.0) < 1e-6:
+                            logger.info(f"✅ Verified 1 token transfer from {user_address} to {verifier_address}")
                             return True
 
+        logger.info("❌ No matching 1-token transfer found.")
         return False
 
     except Exception as e:
-        logger.error(f"Solana Moralis transfer check error: {e}")
+        logger.error(f"Helius transfer check error: {e}")
         return False
+
