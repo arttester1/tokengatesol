@@ -137,7 +137,7 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
         headers = {"accept": "application/json", "X-API-Key": MORALIS_API_KEY}
 
         # Fetch recent transactions
-        response = await asyncio.to_thread(requests.get, url, headers)
+        response = await asyncio.to_thread(requests.get, url, headers=headers)
         response.raise_for_status()
         txs = response.json()
 
