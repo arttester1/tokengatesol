@@ -128,7 +128,7 @@ async def get_token_decimals(token_address: str, chain_id: str = "sol") -> int:
 # Token Transfer Checking
 # ---------------------------------------------
 import time
-from solana.publickey import PublicKey
+from solders.pubkey import Pubkey as PublicKey
 
 # Constants for Solana programs
 TOKEN_PROGRAM_ID = PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
