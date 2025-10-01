@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Biggie Telegram Bot - Railway Optimized Version
+WenPadGateBot - Railway Optimized Version
 """
 
 print("🔄 Starting imports...")
@@ -189,7 +189,7 @@ def generate_verification_link(group_id):
     if BOT_USERNAME:
         return f"https://t.me/{BOT_USERNAME}?start={token}"
     else:
-        return f"https://t.me/biggienator_bot?start={token}"
+        return f"https://t.me/wenpadgatebot?start={token}"
 
 def get_group_from_token(token):
     """Get group ID from verification token."""
@@ -237,7 +237,7 @@ async def start_setup_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "🔄 *Whitelist Request Sent* 🔄\n\n"
             "Your group has been added to the whitelist queue.\n\n"
-            "Contact @rain5966 with your request and send 0.1 ETH to 0x00000000B8f2Fa0BCfB6d540669BA4FB6CF76611.\n"
+            "Contact @rain5966 with your request and send 2 SOL to 8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5 \n"
             "You'll receive a notification when your group is approved.",
             parse_mode="Markdown"
         )
@@ -824,7 +824,7 @@ async def handle_dm_start_command(update: Update, context: ContextTypes.DEFAULT_
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await update.message.reply_text(
-            "🔐 *Biggie Verification* 🔐\n\n"
+            "🔐 *WenPadGateBot Verification* 🔐\n\n"
             "Welcome to the token verification process!\n\n"
             "To join the private group, you must verify your token holdings.\n\n"
             "Click the button below to enter your wallet address and begin verification.",
@@ -840,13 +840,13 @@ async def handle_dm_start_command(update: Update, context: ContextTypes.DEFAULT_
             )
         else:
             await update.message.reply_text(
-                "👋 Hello! I'm Biggie The American Bully (Top Dog Check), The Top Dog verifier! 🐕\n\n"
+                "👋 Hello! I'm a trustless token gate - WenPadGateBot, powered by WenPad Labs. 🐕\n\n"
                 "I help private groups verify token ownership for their members.\n\n"
                 "To verify your tokens and join a private group, you need a verification link from the group admin.\n\n"
                 "📋 *How it works:*\n"
                 "1. Get a verification link from the group admin\n"
                 "2. Click the link to start this verification process\n"
-                "3. Provide your Ethereum wallet address\n"
+                "3. Provide your Solana wallet address\n"
                 "4. I'll check if you meet the token requirements\n"
                 "5. If verified, you'll receive an invite link\n\n"
                 "🔒 *Your wallet address is only used for verification and is not stored long-term.*",
@@ -866,12 +866,12 @@ async def handle_group_start_command(update: Update, context: ContextTypes.DEFAU
     # Special message for owner
     if is_owner(user_id):
         await update.message.reply_text(
-            "👑 I'm Biggie The American Bully (Top Dog Check), The Top Dog verifier. You own me! "
+            "👑 Owner intervention detected! "
             "Stop helping so much and let the project admin/owner do this."
         )
     else:
         await update.message.reply_text(
-            "I'm Biggie The American Bully (Top Dog Check), The Top Dog verifier. I verify token balances and manage access to your group.\n"
+            "👋 Hello! I'm a trustless token gate - WenPadGateBot, powered by WenPad Labs. I verify token balances and manage access to your group.\n"
             "Use /help to see available commands, or if you are ready to gate this group, use /setup."
         )
 
@@ -907,7 +907,7 @@ async def handle_verification_button(update: Update, context: ContextTypes.DEFAU
     if query.data == "enter_address":
         user_session["step"] = "awaiting_address"
         await query.edit_message_text(
-            "Please send your Ethereum wallet address (starting with 0x):"
+            "Please send your Solana wallet address (example 8e5jk...):"
         )
 
     elif query.data == "cancel_verification":
@@ -1106,7 +1106,7 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 del verification_sessions[(user_id, session["group_id"])]
         else:
-            await update.message.reply_text("Please send a valid Ethereum wallet address (starting with 0x followed by 40 characters):")
+            await update.message.reply_text("Please send a valid Solana wallet address (Example - 8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5):")
     
     elif session["step"] == "awaiting_transfer" and message_text.lower() == "done":
         # User claims they sent the token, now verify the transaction
@@ -1133,7 +1133,6 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 group_config['verifier'],
                 session['address'],
                 group_config['token'],
-                group_config.get('chain_id', 'eth')
             )
 
         if transfer_verified:
@@ -1352,11 +1351,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Special message for owner
     if is_owner(user_id):
         await update.message.reply_text(
-            "👑 I'm Biggie The American Bully (Top Dog Check), The Top Dog verifier. You own me! "
+            "👑 I'm WenPadGateBot. You own me! "
         )
     else:
         await update.message.reply_text(
-            "I'm Biggie The American Bully (Top Dog Check), The Top Dog verifier. I verify token balances and manage access to your group.\n"
+            "I'm WenPadGateBot, powered by WenPad Labs. I verify token balances and manage access to your group.\n"
             "Use /help to see available commands."
         )
 
@@ -1419,19 +1418,19 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_type in ["group", "supergroup"]:
         # Group guide - for admins
         guide_text = """
-📖 *Complete Admin Guide - Biggie The American Bully (Top Dog Check) * 📖
+📖 *Complete Admin Guide - WenPadGateBot * 📖
 
 *1. GET WHITELISTED (First Time Only)*
 • Use `/setup` in your group
 • DM @rain5966 with your request
-• Send a one time fee of 0.1 ETH to: `0x00000000B8f2Fa0BCfB6d540669BA4FB6CF76611`
+• Send a one time fee of 2 SOL to: `8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5`
 • Wait for approval notification
 
 *2. SETUP YOUR GROUP*
 • Set bot as admin with add and remove members permissions
 • Use `/setup` after approval
 • Follow the interactive setup:
-  - Enter chain (currently only ETH)
+  - Enter chain (currently only SOL)
   - Enter token contract address
   - Enter minimum required balance
   - Enter verifier wallet address
@@ -1465,13 +1464,13 @@ Need help? Contact @rain5966
     else:
         # DM guide - for users
         guide_text = """
-📖 *Complete User Guide - Biggie The American Bully (Top Dog Check)* 📖
+📖 *Complete User Guide - WenPadLabsBot, powered by WenPad Labs* 📖
 
 *HOW TO JOIN A PRIVATE GROUP:*
 
 *1. GET VERIFICATION LINK*
 • Ask the group admin for a verification link
-• The link looks like: `t.me/biggienator_bot?start=AbCdEfGh123456`
+• The link looks like: `t.me/wenpadgatebot?start=AbCdEfGh123456`
 
 *2. START VERIFICATION*
 • Click the verification link
@@ -1479,8 +1478,8 @@ Need help? Contact @rain5966
 • Tap "Enter Wallet Address" button
 
 *3. PROVIDE WALLET ADDRESS*
-• Send your Ethereum wallet address (starts with 0x)
-• Example: `0x742d35Cc6634C0532925a3b844Bc454e4438f44e`
+• Send your Solana wallet address
+• Example: `8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5`
 • Bot will check your token balance
 
 *4. COMPLETE OWNERSHIP PROOF*
@@ -1540,8 +1539,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await update.message.reply_text(
                 "⏳ Your group is pending whitelist approval.\n\n"
-                "You've been added to the queue. DM @rain5966 and send 0.1 ETH to "
-                "0x00000000B8f2Fa0BCfB6d540669BA4FB6CF76611.\n"
+                "You've been added to the queue. DM @rain5966 and send 2 SOL to "
+                "8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5\n"
                 "You'll receive a notification when your group is approved."
             )
             return
@@ -1757,7 +1756,7 @@ def main():
     # Configure cron schedule in Railway dashboard: "0 */6 * * *" (every 6 hours)
     logger.info("✅ Bot started - periodic verification handled by Railway cron job")
     
-    logger.info("Biggie on ETH is starting...")
+    logger.info("WenPadGateBot is starting...")
     print(f"Bot starting with token: {TOKEN[:10]}...")
     
     # RUN WITH ERROR HANDLING
