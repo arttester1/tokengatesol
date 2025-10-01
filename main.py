@@ -1420,15 +1420,17 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         guide_text = """
 📖 *Complete Admin Guide - WenPadGateBot * 📖
 
-*1. GET WHITELISTED (First Time Only)*
+*1. SETUP YOUR GROUP*
+• Create a private group with no other members present
+• Go to user permissions in group settings and only leave Send Text and Media messages, disable the rest
+• Invite WenPadGateBot and set bot as admin with add and remove members permissions
+
+*2. GET WHITELISTED (First Time Only)*
 • Use `/setup` in your group
 • DM @rain5966 with your request
 • Send a one time fee of 2 SOL to: `8e5jkNeRnkz2HBzqu3fmiWEwv2kSeAMLutQcaqP3UtQ5`
 • Wait for approval notification
-
-*2. SETUP YOUR GROUP*
-• Set bot as admin with add and remove members permissions
-• Use `/setup` after approval
+• Use `/setup` after whitelist approved message
 • Follow the interactive setup:
   - Enter chain (currently only SOL)
   - Enter token contract address
@@ -1499,7 +1501,16 @@ Need help? Contact @rain5966
 🔄 If transfer isn't detected, use "Retry" button
 ❌ Don't join the group without verification - you'll be removed
 
-Need help? Contact your group admin first, then @rain5966
+Need help? Contact your group admin.
+
+*BRIEF GROUP ADMIN INSTRUCTIONS*
+*SETUP YOUR GROUP*
+• Create a private group with no other members present
+• Go to user permissions in group settings and only leave Send Text and Media messages, disable the rest
+• Invite WenPadGateBot and set bot as admin with add and remove members permissions
+• Use `/setup` in your group to get whitelisted
+• Use `/guide` in your group for more detailed admin guide
+
 """
     
     await update.message.reply_text(guide_text, parse_mode="Markdown")
