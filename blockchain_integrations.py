@@ -31,29 +31,21 @@ def is_valid_solana_address(address: str) -> bool:
 # Balance Checking Functions
 # ---------------------------------------------
 async def get_token_balance_moralis(wallet_address: str, token_mint: str) -> float:
+    """Get SPL token balance using Moralis API"""
     try:
         url = f"https://solana-gateway.moralis.io/account/mainnet/{wallet_address}/tokens?excludeSpam=true"
         headers = {"accept": "application/json", "X-API-Key": MORALIS_API_KEY}
-        response = await asyncio.to_thread(requests.get, url, headers)
+        response = await asyncio.to_thread(requests.get, url, headers=headers)  # ✅ correct
         response.raise_for_status()
 
         data = response.json()
-        logger.info(f"Moralis raw response: {data}")  # 🔎 log entire response
-
-        # Try both shapes
-        tokens = data if isinstance(data, list) else data.get("tokens", [])
-        token = next((t for t in tokens if t.get("mint") == token_mint), None)
-
+        token = next((t for t in data if t.get("mint") == token_mint), None)
         if token:
-            # Moralis sometimes gives "amount", sometimes "uiAmountString"
-            amount = token.get("amount") or token.get("uiAmountString") or "0"
-            return float(amount)
-
+            return float(token.get("amount", "0"))
         return 0.0
     except Exception as e:
         logger.error(f"Moralis Error: {e}")
         return 0.0
-
 
 async def get_token_balance_rpc(wallet_address: str, token_mint: str) -> float:
     """Get SPL token balance using Solana RPC"""
