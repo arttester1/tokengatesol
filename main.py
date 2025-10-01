@@ -326,16 +326,16 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text("Only SOL is currently supported. Please enter 'SOL'.")
             return
         
-        session["data"]["chain_id"] = "eth"
+        session["data"]["chain_id"] = "sol"
         session["step"] = "token_address"
         await update.message.reply_text("Enter the token contract address:")
     
     elif step == "token_address":
-        if not is_valid_solana_address(message_text):
+        if not is_valid_solana_address(raw_text):
             await update.message.reply_text("Invalid Solana address format. Please enter a valid token mint:")
             return
         
-        session["data"]["token"] = message_text
+        session["data"]["token"] = raw_text
         session["step"] = "min_balance"
         await update.message.reply_text("Enter the minimum required token balance (e.g., 1.5):")
     
@@ -349,11 +349,11 @@ async def handle_setup_response(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text("Enter the verifier wallet address (where users will send 1 token to verify ownership):")
     
     elif step == "verifier_address":
-        if not is_valid_solana_address(message_text):
+        if not is_valid_solana_address(raw_text):
             await update.message.reply_text("Invalid Solana address format. Please enter a valid wallet address:")
             return
         
-        session["data"]["verifier"] = message_text
+        session["data"]["verifier"] = raw_text
         await complete_setup(update, user_id, group_id)
 
 async def complete_setup(update: Update, user_id: int, group_id: int):

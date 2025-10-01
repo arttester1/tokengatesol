@@ -22,7 +22,7 @@ def is_valid_solana_address(address: str) -> bool:
     """Validate Solana address/mint format (base58, 32–44 chars)."""
     try:
         decoded = base58.b58decode(address)
-        return len(decoded) in (32, 33)  # valid length for pubkeys
+        return len(decoded) == 32
     except Exception:
         return False
 
