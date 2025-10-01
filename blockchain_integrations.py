@@ -174,6 +174,8 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
 
             # Step 3: Walk parsed instructions
             instructions = tx_data.get("transaction", {}).get("message", {}).get("instructions", [])
+            for ix in instructions[:5]:
+                logger.info(f"🔎 Instruction: {ix}")
             for ix in instructions:
                 parsed = ix.get("parsed", {})
                 ix_type = parsed.get("type")
