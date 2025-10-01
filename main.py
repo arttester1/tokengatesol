@@ -953,7 +953,6 @@ async def handle_verification_button(update: Update, context: ContextTypes.DEFAU
                 group_config['verifier'],
                 user_session['address'],
                 group_config['token'],
-                group_config.get('chain_id', 'eth')
             )
 
             if transfer_verified:
@@ -1128,7 +1127,6 @@ async def handle_dm_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 group_config['verifier'],
                 session['address'],
                 group_config['token'],
-                group_config.get('chain_id', 'eth')
             )
         else:
             transfer_verified = await check_token_transfer(
