@@ -130,13 +130,10 @@ async def get_token_decimals(token_address: str, chain_id: str = "sol") -> int:
 async def check_token_transfer_moralis(verifier_address: str, user_address: str, token_mint: str, limit: int = 20) -> bool:
     """
     Check if the user sent exactly 1 SPL token (token_mint) to verifier_address.
-    Uses Helius parsed transaction API instead of raw RPC.
+    Uses standard Solana RPC (works on Helius endpoint).
     """
     try:
-        url = f"{RPC_ENDPOINT}"
-        headers = {"Content-Type": "application/json"}
-
-        # Step 1: Get recent transactions for the user
+        # Step 1: Get recent signatures for the user
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -146,7 +143,8 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
                 {"limit": limit}
             ],
         }
-        resp = await asyncio.to_thread(requests.post, url, json=payload, headers=headers)
+        headers = {"Content-Type": "application/json"}
+        resp = await asyncio.to_thread(requests.post, RPC_ENDPOINT, json=payload, headers=headers)
         resp.raise_for_status()
         signatures = [sig["signature"] for sig in resp.json().get("result", [])]
 
@@ -154,22 +152,21 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
             logger.info("No recent signatures found for user.")
             return False
 
-        # Step 2: Ask Helius for parsed transactions (cleaner than raw RPC)
-        tx_payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "getTransactions",
-            "params": [signatures, {"encoding": "jsonParsed"}],
-        }
-        tx_resp = await asyncio.to_thread(requests.post, url, json=tx_payload, headers=headers)
-        tx_resp.raise_for_status()
-        txs = tx_resp.json().get("result", [])
-
-        # Step 3: Check each transaction for a matching transfer
-        for tx in txs:
-            if not tx:
+        # Step 2: Check each transaction individually
+        for sig in signatures:
+            tx_payload = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTransaction",
+                "params": [sig, {"encoding": "jsonParsed"}],
+            }
+            tx_resp = await asyncio.to_thread(requests.post, RPC_ENDPOINT, json=tx_payload, headers=headers)
+            tx_resp.raise_for_status()
+            tx_data = tx_resp.json().get("result")
+            if not tx_data:
                 continue
-            instructions = tx.get("transaction", {}).get("message", {}).get("instructions", [])
+
+            instructions = tx_data.get("transaction", {}).get("message", {}).get("instructions", [])
             for ix in instructions:
                 parsed = ix.get("parsed", {})
                 if parsed.get("type") == "transfer":
@@ -188,6 +185,7 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
         return False
 
     except Exception as e:
-        logger.error(f"Helius transfer check error: {e}")
+        logger.error(f"RPC transfer check error: {e}")
         return False
+
 
