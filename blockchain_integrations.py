@@ -128,7 +128,7 @@ async def get_token_decimals(token_address: str, chain_id: str = "sol") -> int:
 # Token Transfer Checking
 # ---------------------------------------------
 import time
-from solders.pubkey import Pubkey as PublicKey  # ✅ new import
+from solders.pubkey import Pubkey as PublicKey
 
 logger = logging.getLogger(__name__)
 
@@ -138,8 +138,8 @@ ASSOCIATED_TOKEN_PROGRAM_ID = PublicKey.from_string("ATokenGPvbdGVxr1b2hvZbsiqW5
 
 def derive_ata(wallet: str, mint: str) -> str:
     """Derive the associated token account (ATA) for a wallet + mint."""
-    wallet_pk = PublicKey.from_string(wallet)   # ✅ fixed
-    mint_pk = PublicKey.from_string(mint)       # ✅ fixed
+    wallet_pk = PublicKey.from_string(wallet)
+    mint_pk = PublicKey.from_string(mint)
     ata, _ = PublicKey.find_program_address(
         [bytes(wallet_pk), bytes(TOKEN_PROGRAM_ID), bytes(mint_pk)],
         ASSOCIATED_TOKEN_PROGRAM_ID
@@ -156,12 +156,13 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
         user_ata = derive_ata(user_address, token_mint)
         verifier_ata = derive_ata(verifier_address, token_mint)
 
+        # ✅ Step 1: Get recent signatures for the USER'S ATA, not wallet
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "getSignaturesForAddress",
             "params": [
-                user_address,
+                user_ata,
                 {"limit": limit}
             ],
         }
@@ -171,9 +172,10 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
         signatures = [sig["signature"] for sig in resp.json().get("result", [])]
 
         if not signatures:
-            logger.info("No recent signatures found for user.")
+            logger.info("❌ No recent signatures found for user ATA.")
             return False
 
+        # ✅ Step 2: Inspect each transaction
         for sig in signatures:
             tx_payload = {
                 "jsonrpc": "2.0",
@@ -205,6 +207,7 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
                     ):
                         amount = float(info.get("tokenAmount", {}).get("uiAmount", 0))
                         if abs(amount - 1.0) < 1e-6:
+                            # ✅ Enforce expiration (2.5 hours = 9000s)
                             age = time.time() - block_time
                             if age > 9000:
                                 logger.info("❌ Transfer found but expired (older than 2.5 hours)")
