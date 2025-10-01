@@ -128,16 +128,18 @@ async def get_token_decimals(token_address: str, chain_id: str = "sol") -> int:
 # Token Transfer Checking
 # ---------------------------------------------
 import time
-from solders.pubkey import Pubkey as PublicKey
+from solders.pubkey import Pubkey as PublicKey  # ✅ new import
+
+logger = logging.getLogger(__name__)
 
 # Constants for Solana programs
-TOKEN_PROGRAM_ID = PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
-ASSOCIATED_TOKEN_PROGRAM_ID = PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
+TOKEN_PROGRAM_ID = PublicKey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+ASSOCIATED_TOKEN_PROGRAM_ID = PublicKey.from_string("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL")
 
 def derive_ata(wallet: str, mint: str) -> str:
     """Derive the associated token account (ATA) for a wallet + mint."""
-    wallet_pk = PublicKey(wallet)
-    mint_pk = PublicKey(mint)
+    wallet_pk = PublicKey.from_string(wallet)   # ✅ fixed
+    mint_pk = PublicKey.from_string(mint)       # ✅ fixed
     ata, _ = PublicKey.find_program_address(
         [bytes(wallet_pk), bytes(TOKEN_PROGRAM_ID), bytes(mint_pk)],
         ASSOCIATED_TOKEN_PROGRAM_ID
@@ -154,7 +156,6 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
         user_ata = derive_ata(user_address, token_mint)
         verifier_ata = derive_ata(verifier_address, token_mint)
 
-        # Step 1: Get recent signatures for the user
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -173,7 +174,6 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
             logger.info("No recent signatures found for user.")
             return False
 
-        # Step 2: Inspect each transaction
         for sig in signatures:
             tx_payload = {
                 "jsonrpc": "2.0",
@@ -191,7 +191,6 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
             if not block_time:
                 continue
 
-            # Step 3: Walk parsed instructions
             instructions = tx_data.get("transaction", {}).get("message", {}).get("instructions", [])
             for ix in instructions:
                 parsed = ix.get("parsed", {})
@@ -206,7 +205,6 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
                     ):
                         amount = float(info.get("tokenAmount", {}).get("uiAmount", 0))
                         if abs(amount - 1.0) < 1e-6:
-                            # Expiration check: 2.5 hours (9000s)
                             age = time.time() - block_time
                             if age > 9000:
                                 logger.info("❌ Transfer found but expired (older than 2.5 hours)")
