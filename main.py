@@ -840,7 +840,7 @@ async def handle_dm_start_command(update: Update, context: ContextTypes.DEFAULT_
             )
         else:
             await update.message.reply_text(
-                "👋 Hello! I'm a trustless token gate - WenPadGateBot, powered by WenPad Labs. 🐕\n\n"
+                "👋 Hello! I'm a trustless token gate - WenPadGateBot, powered by WenPad Labs.\n\n"
                 "I help private groups verify token ownership for their members.\n\n"
                 "To verify your tokens and join a private group, you need a verification link from the group admin.\n\n"
                 "📋 *How it works:*\n"
