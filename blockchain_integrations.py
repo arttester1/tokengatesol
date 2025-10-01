@@ -127,10 +127,12 @@ async def get_token_decimals(token_address: str, chain_id: str = "sol") -> int:
 # ---------------------------------------------
 # Token Transfer Checking
 # ---------------------------------------------
+import time
+
 async def check_token_transfer_moralis(verifier_address: str, user_address: str, token_mint: str, limit: int = 20) -> bool:
     """
     Check if the user sent exactly 1 SPL token (token_mint) to verifier_address.
-    Uses standard Solana RPC (works on Helius endpoint).
+    Uses Solana RPC (Helius or default). Accepts only recent transfers (<= 2.5 hours old).
     """
     try:
         # Step 1: Get recent signatures for the user
@@ -152,7 +154,7 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
             logger.info("No recent signatures found for user.")
             return False
 
-        # Step 2: Check each transaction individually
+        # Step 2: Inspect each transaction
         for sig in signatures:
             tx_payload = {
                 "jsonrpc": "2.0",
@@ -166,10 +168,16 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
             if not tx_data:
                 continue
 
+            block_time = tx_data.get("blockTime")
+            if not block_time:
+                continue
+
+            # Step 3: Walk parsed instructions
             instructions = tx_data.get("transaction", {}).get("message", {}).get("instructions", [])
             for ix in instructions:
                 parsed = ix.get("parsed", {})
-                if parsed.get("type") == "transfer":
+                ix_type = parsed.get("type")
+                if ix_type in ("transfer", "transferChecked"):  # ✅ catch both
                     info = parsed.get("info", {})
                     if (
                         info.get("source") == user_address
@@ -178,6 +186,11 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
                     ):
                         amount = float(info.get("tokenAmount", {}).get("uiAmount", 0))
                         if abs(amount - 1.0) < 1e-6:
+                            # ✅ Check expiration (2.5 hours = 9000s)
+                            age = time.time() - block_time
+                            if age > 9000:
+                                logger.info("❌ Transfer found but expired (older than 2.5 hours)")
+                                continue
                             logger.info(f"✅ Verified 1 token transfer from {user_address} to {verifier_address}")
                             return True
 
@@ -187,5 +200,6 @@ async def check_token_transfer_moralis(verifier_address: str, user_address: str,
     except Exception as e:
         logger.error(f"RPC transfer check error: {e}")
         return False
+
 
 
