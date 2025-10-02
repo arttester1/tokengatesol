@@ -1423,7 +1423,7 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 *1. SETUP YOUR GROUP*
 • Create a private group with no other members present
 • Go to user permissions in group settings and only leave Send Text and Media messages, disable the rest
-• Invite WenPadGateBot and set bot as admin with add and remove members permissions
+• Invite @WenPadGateBot and set bot as admin with add and remove members permissions
 
 *2. GET WHITELISTED (First Time Only)*
 • Use `/setup` in your group
@@ -1435,7 +1435,7 @@ async def guide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
   - Enter chain (currently only SOL)
   - Enter token contract address
   - Enter minimum required balance
-  - Enter verifier wallet address
+  - Enter verifier wallet address (where users send 1 token to verify wallet ownership)
 
 *3. SHARE VERIFICATION LINK*
 • Use `/status` to get your unique verification link
